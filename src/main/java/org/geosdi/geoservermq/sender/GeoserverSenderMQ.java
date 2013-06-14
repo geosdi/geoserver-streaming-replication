@@ -39,7 +39,6 @@ import org.geoserver.config.util.XStreamPersister;
 import org.geoserver.config.util.XStreamPersisterFactory;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geotools.util.logging.Logging;
-import org.springframework.beans.factory.annotation.Value;
 
 /**
  * @author fizzi
@@ -58,6 +57,7 @@ public class GeoserverSenderMQ implements CatalogListener,
     XStreamPersisterFactory xpf = new XStreamPersisterFactory();
     Catalog catalog;
     XStreamPersister xp;
+    private boolean isWorking = false;
 
     public GeoserverSenderMQ(GeoServerResourceLoader rl, Catalog catalog, String brokerURL) {
         this.brokerURL = brokerURL;
@@ -66,7 +66,7 @@ public class GeoserverSenderMQ implements CatalogListener,
         this.catalog.setResourceLoader(rl);
         xp = xpf.createXMLPersister();
         xp.setCatalog(catalog);
-
+        xp.setEncryptPasswordFields(false);
         catalog.addListener(this);
         LOGGER.info("################### GeoserverActiveMQ ######################");
         initMQ();
@@ -128,64 +128,102 @@ public class GeoserverSenderMQ implements CatalogListener,
     }
 
     public void handleAddEvent(CatalogAddEvent event) throws CatalogException {
-        System.out
-                .println("#################handleAddEvent######################");
-        Object source = event.getSource();
-        try {
-            if (source instanceof LayerInfo) {
-                addLayer((LayerInfo) source);
-            } else if (source instanceof FeatureTypeInfo) {
-                addFeatureType((FeatureTypeInfo) source);
-            } else if (source instanceof DataStoreInfo) {
-                addDataStore((DataStoreInfo) source);
+        if (!this.isWorking) {
+            System.out
+                    .println("#################handleAddEvent######################");
+            Object source = event.getSource();
+            try {
+                if (source instanceof LayerInfo) {
+                    addLayer((LayerInfo) source);
+                } else if (source instanceof FeatureTypeInfo) {
+                    addFeatureType((FeatureTypeInfo) source);
+                } else if (source instanceof DataStoreInfo) {
+                    addDataStore((DataStoreInfo) source);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (JMSException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (JMSException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
         }
 
     }
 
     // layers
     void addLayer(LayerInfo l) throws IOException, JMSException {
-        LOGGER.fine("CLUSTER Message  - Persisting layer " + l.getName());
-
-
-        File file = File.createTempFile("test", ".dat");
-        persist(l, file);
-        String messageStr = FileUtils.readFileToString(file);
-        Message message = session.createTextMessage(messageStr);
-        message.setStringProperty("type", "LayerInfo");
-        producer.send(message);
+        if (!isWorking) {
+            LOGGER.fine("CLUSTER Message  - Persisting layer " + l.getName());
+            File file = File.createTempFile("test", ".dat");
+            persist(l, file);
+            String messageStr = FileUtils.readFileToString(file);
+            Message message = session.createTextMessage(messageStr);
+            message.setStringProperty("type", "LayerInfo");
+            message.setStringProperty("sender", super.toString());
+            message.setStringProperty("operation", "ADD");
+            LOGGER.info("MESSAGE : " +messageStr);
+            producer.send(message);
+        }
 
     }
 
     void addFeatureType(FeatureTypeInfo ft) throws IOException, JMSException {
-        File file = File.createTempFile("test", ".dat");
-        persist(ft, file);
-        String messageStr = FileUtils.readFileToString(file);
-        Message message = session.createTextMessage(messageStr);
-        message.setStringProperty("type", "FeatureTypeInfo");
-        producer.send(message);
+        if (!isWorking) {
+            File file = File.createTempFile("test", ".dat");
+            persist(ft, file);
+            String messageStr = FileUtils.readFileToString(file);
+            Message message = session.createTextMessage(messageStr);
+            message.setStringProperty("type", "FeatureTypeInfo");
+            message.setStringProperty("sender", super.toString());
+            message.setStringProperty("operation", "ADD");
+            LOGGER.info("MESSAGE : " +messageStr);
+            producer.send(message);
+        }
     }
 
     //datastores
     void addDataStore(DataStoreInfo ds) throws IOException, JMSException {
-        LOGGER.fine("Persisting datastore " + ds.getName());
-        File file = File.createTempFile("test", ".dat");
-        persist(ds, file);
-        String messageStr = FileUtils.readFileToString(file);
-        Message message = session.createTextMessage(messageStr);
-        message.setStringProperty("type", "DataStoreInfo");
-        producer.send(message);
+        if (!isWorking) {
+            LOGGER.info("Persisting datastore " + ds.getName());
+            File file = File.createTempFile("test", ".dat");
+            persist(ds, file);
+            String messageStr = FileUtils.readFileToString(file);
+            Message message = session.createTextMessage(messageStr);
+            message.setStringProperty("type", "DataStoreInfo");
+            message.setStringProperty("sender", super.toString());
+            message.setStringProperty("operation", "ADD");
+            LOGGER.info("MESSAGE : " +messageStr);
+            producer.send(message);
+        }
     }
 
     public void handleRemoveEvent(CatalogRemoveEvent event)
             throws CatalogException {
-        System.out
-                .println("#################handleRemoveEvent######################");
+
+        if (!isWorking) {
+            System.out
+                    .println("#################handleRemoveEvent######################");
+
+            Object source = event.getSource();
+            try {
+                if (source instanceof LayerInfo) {
+                    removeLayer((LayerInfo) source);
+                } else if (source instanceof FeatureTypeInfo) {
+                    removeFeatureType((FeatureTypeInfo) source);
+                } else if (source instanceof DataStoreInfo) {
+                    removeDataStore((DataStoreInfo) source, event);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (JMSException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+
+        }
+
+
+
 
     }
 
@@ -200,6 +238,8 @@ public class GeoserverSenderMQ implements CatalogListener,
             throws CatalogException {
         System.out
                 .println("#################handlePostModifyEvent######################");
+
+
 
     }
 
@@ -282,5 +322,54 @@ public class GeoserverSenderMQ implements CatalogListener,
     @Override
     public void handleServiceRemove(ServiceInfo service) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    public boolean isWorking() {
+        return isWorking;
+    }
+
+    public void setIsWorking(boolean isWorking) {
+        this.isWorking = isWorking;
+    }
+
+    private void removeLayer(LayerInfo layerInfo) throws IOException, JMSException {
+
+        LOGGER.fine("CLUSTER Message  - Persisting layer " + layerInfo.getName());
+        File file = File.createTempFile("test", ".dat");
+        persist(layerInfo, file);
+        String messageStr = FileUtils.readFileToString(file);
+        Message message = session.createTextMessage(messageStr);
+        message.setStringProperty("type", "LayerInfo");
+        message.setStringProperty("sender", super.toString());
+        message.setStringProperty("operation", "REMOVE");
+        LOGGER.info("MESSAGE : " +messageStr);
+        producer.send(message);
+
+    }
+
+    private void removeFeatureType(FeatureTypeInfo featureTypeInfo) throws IOException, JMSException {
+        LOGGER.fine("CLUSTER Message  - Remove feature type " + featureTypeInfo.getName());
+        File file = File.createTempFile("test", ".dat");
+        persist(featureTypeInfo, file);
+        String messageStr = FileUtils.readFileToString(file);
+        Message message = session.createTextMessage(messageStr);
+        message.setStringProperty("type", "FeatureTypeInfo");
+        message.setStringProperty("sender", super.toString());
+        message.setStringProperty("operation", "REMOVE");
+        LOGGER.info("MESSAGE : " +messageStr);
+        producer.send(message);
+    }
+
+    private void removeDataStore(DataStoreInfo dataStoreInfo, CatalogRemoveEvent event) throws IOException, JMSException {
+        LOGGER.fine("CLUSTER Message  - Remove datastore " + dataStoreInfo.getName());
+        File file = File.createTempFile("test", ".dat");
+        persist(dataStoreInfo, file);
+        String messageStr = FileUtils.readFileToString(file);
+        Message message = session.createTextMessage(messageStr);
+        message.setStringProperty("type", "DataStoreInfo");
+        message.setStringProperty("sender", super.toString());
+        message.setStringProperty("operation", "REMOVE");
+        LOGGER.info("MESSAGE : " +messageStr);
+        producer.send(message);
     }
 }

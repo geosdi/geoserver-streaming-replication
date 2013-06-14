@@ -33,6 +33,8 @@
         <bean id="geoserverReceiver" class="org.geosdi.geoservermq.receiver.GeoserverReceiverMQ">
             <constructor-arg ref="resourceLoader" />
             <constructor-arg ref="rawCatalog" />
+            <constructor-arg value="geoservermq{brokerURL}"/>
+            <constructor-arg ref="geoserverSender" />
         </bean>
     </beans>
 
