@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+
+<beans>
+	<bean id="geoserverSender" class="org.geosdi.geoservermq.sender.GeoserverSenderMQ">
+		<constructor-arg ref="resourceLoader" />
+		<constructor-arg ref="rawCatalog" />
+	</bean>
+        
+        <bean id="geoserverReceiver" class="org.geosdi.geoservermq.receiver.GeoserverReceiverMQ">
+		<constructor-arg ref="resourceLoader" />
+		<constructor-arg ref="rawCatalog" />
+	</bean>
+</beans>
