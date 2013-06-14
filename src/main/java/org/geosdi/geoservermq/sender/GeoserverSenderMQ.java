@@ -49,8 +49,7 @@ public class GeoserverSenderMQ implements CatalogListener,
         ConfigurationListener {
 
     static Logger LOGGER = Logging.getLogger("org.geoserver.config");
-    @Value(value = "geoservermq{brokerURL}")
-    public String brokerURL;
+    public final String brokerURL;
     private ConnectionFactory factory;
     private Connection connection;
     private Session session;
@@ -60,7 +59,8 @@ public class GeoserverSenderMQ implements CatalogListener,
     Catalog catalog;
     XStreamPersister xp;
 
-    public GeoserverSenderMQ(GeoServerResourceLoader rl, Catalog catalog) {
+    public GeoserverSenderMQ(GeoServerResourceLoader rl, Catalog catalog, String brokerURL) {
+        this.brokerURL = brokerURL;
         this.rl = rl;
         this.catalog = catalog;
         this.catalog.setResourceLoader(rl);
