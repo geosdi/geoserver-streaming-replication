@@ -22,6 +22,7 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.commons.io.FileUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CatalogException;
+import org.geoserver.catalog.CoverageStoreInfo;
 import org.geoserver.catalog.DataStoreInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
 import org.geoserver.catalog.LayerInfo;
@@ -139,6 +140,8 @@ public class GeoserverSenderMQ implements CatalogListener,
                     addFeatureType((FeatureTypeInfo) source);
                 } else if (source instanceof DataStoreInfo) {
                     addDataStore((DataStoreInfo) source);
+                } else if ( source instanceof CoverageStoreInfo ) {
+                    addCoverageStore((CoverageStoreInfo)source);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -174,6 +177,21 @@ public class GeoserverSenderMQ implements CatalogListener,
             String messageStr = FileUtils.readFileToString(file);
             Message message = session.createTextMessage(messageStr);
             message.setStringProperty("type", "FeatureTypeInfo");
+            message.setStringProperty("sender", super.toString());
+            message.setStringProperty("operation", "ADD");
+            LOGGER.info("MESSAGE : " +messageStr);
+            producer.send(message);
+        }
+    }
+    
+    void addCoverageStore(CoverageStoreInfo cs) throws IOException, JMSException {
+        if (!isWorking) {
+            LOGGER.info("Persisting datastore " + cs.getName());
+            File file = File.createTempFile("test", ".dat");
+            persist(cs, file);
+            String messageStr = FileUtils.readFileToString(file);
+            Message message = session.createTextMessage(messageStr);
+            message.setStringProperty("type", "CoverageStoreInfo");
             message.setStringProperty("sender", super.toString());
             message.setStringProperty("operation", "ADD");
             LOGGER.info("MESSAGE : " +messageStr);
@@ -364,6 +382,19 @@ public class GeoserverSenderMQ implements CatalogListener,
         LOGGER.fine("CLUSTER Message  - Remove datastore " + dataStoreInfo.getName());
         File file = File.createTempFile("test", ".dat");
         persist(dataStoreInfo, file);
+        String messageStr = FileUtils.readFileToString(file);
+        Message message = session.createTextMessage(messageStr);
+        message.setStringProperty("type", "DataStoreInfo");
+        message.setStringProperty("sender", super.toString());
+        message.setStringProperty("operation", "REMOVE");
+        LOGGER.info("MESSAGE : " +messageStr);
+        producer.send(message);
+    }
+    
+    private void removeCoverageStore(CoverageStoreInfo coverageStoreInfo, CatalogRemoveEvent event) throws IOException, JMSException {
+        LOGGER.fine("CLUSTER Message  - Remove datastore " + coverageStoreInfo.getName());
+        File file = File.createTempFile("test", ".dat");
+        persist(coverageStoreInfo, file);
         String messageStr = FileUtils.readFileToString(file);
         Message message = session.createTextMessage(messageStr);
         message.setStringProperty("type", "DataStoreInfo");

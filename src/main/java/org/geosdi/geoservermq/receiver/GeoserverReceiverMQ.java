@@ -3,6 +3,7 @@
  */
 package org.geosdi.geoservermq.receiver;
 
+import java.util.List;
 import java.util.logging.Logger;
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
@@ -16,10 +17,15 @@ import javax.jms.Topic;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.geosdi.geoservermq.sender.GeoserverSenderMQ;
+import org.geoserver.catalog.CascadeDeleteVisitor;
+import org.geoserver.catalog.CascadeDeleteVisitor;
 import org.geoserver.catalog.Catalog;
+import org.geoserver.catalog.CatalogInfo;
+import org.geoserver.catalog.CoverageStoreInfo;
 import org.geoserver.catalog.DataStoreInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
 import org.geoserver.catalog.LayerInfo;
+import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.config.GeoServerPersisterManager;
 import org.geoserver.config.util.XStreamPersister;
 import org.geoserver.config.util.XStreamPersisterFactory;
@@ -65,7 +71,7 @@ public class GeoserverReceiverMQ implements MessageListener {
 
         xp = xpf.createXMLPersister();
         xp.setCatalog(catalog);
-        
+
         this.gsp = new GeoServerPersisterManager(rl, xp);
     }
 
@@ -84,9 +90,16 @@ public class GeoserverReceiverMQ implements MessageListener {
                     this.geoserverSender.setIsWorking(true);
                     try {
                         if (message.getStringProperty("operation").equals("REMOVE")) {
-                            catalog.remove(ft);
-                            //this.gsp.removeFeatureType(ft);
+                            LOGGER.info("Removing ... " + ft.getName());
+                            List<LayerInfo> selection = catalog.getLayers(catalog.getResource(ft.getId(), ResourceInfo.class));
+                            System.out.println("Removing...: " +selection);                    
+                            CascadeDeleteVisitor visitor = new CascadeDeleteVisitor(catalog);
+                            ft.accept(visitor);
+                            for (LayerInfo li : selection) {
+                                 li.accept(visitor);
+                            }
                         } else {
+                            LOGGER.info("Adding ... " + ft.getId());
                             catalog.add(ft);
                         }
                     } catch (Exception e) {
@@ -99,15 +112,18 @@ public class GeoserverReceiverMQ implements MessageListener {
                 } else if (message.getStringProperty("type").equals("LayerInfo") && !this.geoserverSender.isWorking()) {
                     TextMessage txtMessage = (TextMessage) message;
                     LOGGER.info(txtMessage.getText());
-                    LayerInfo ft = (LayerInfo) xp.getXStream().fromXML(
+                    LayerInfo li = (LayerInfo) xp.getXStream().fromXML(
                             txtMessage.getText());
                     this.geoserverSender.setIsWorking(true);
                     try {
                         if (message.getStringProperty("operation").equals("REMOVE")) {
-                            catalog.remove(ft);
+                            LOGGER.info("Removing ... " + li.getName());
+                            CascadeDeleteVisitor visitor = new CascadeDeleteVisitor(catalog);
+                            li.accept(visitor);
                             //this.gsp.removeLayer(ft);
                         } else {
-                            catalog.add(ft);
+                            LOGGER.info("Adding ... " + li.getName());
+                            catalog.add(li);
                         }
                     } catch (Exception e) {
                         System.out.println("Caught:" + e);
@@ -117,7 +133,7 @@ public class GeoserverReceiverMQ implements MessageListener {
                     }
                 } else if (message.getStringProperty("type")
                         .equals("DataStoreInfo") && !this.geoserverSender.isWorking()) {
-                    
+
                     xp.setEncryptPasswordFields(false);
                     TextMessage txtMessage = (TextMessage) message;
                     LOGGER.info(txtMessage.getText());
@@ -126,9 +142,13 @@ public class GeoserverReceiverMQ implements MessageListener {
                     this.geoserverSender.setIsWorking(true);
                     try {
                         if (message.getStringProperty("operation").equals("REMOVE")) {
-                            this.catalog.remove(ds);
+                            LOGGER.info("Removing ... " + ds.getName());
+
+                            CascadeDeleteVisitor visitor = new CascadeDeleteVisitor(catalog);
+                            ds.accept(visitor);
                             //this.gsp.removeDataStore(ds);
                         } else {
+                            LOGGER.info("Adding ... " + ds.getName());
                             catalog.add(ds);
                         }
                     } catch (Exception e) {
@@ -138,10 +158,38 @@ public class GeoserverReceiverMQ implements MessageListener {
                         this.geoserverSender.setIsWorking(false);
                     }
 
-                } else {
+                } else if (message.getStringProperty("type")
+                        .equals("CoverageStoreInfo") && !this.geoserverSender.isWorking()) {
+                    
+                    xp.setEncryptPasswordFields(false);
+                    TextMessage txtMessage = (TextMessage) message;
+                    LOGGER.info(txtMessage.getText());
+                    CoverageStoreInfo cs = (CoverageStoreInfo) xp.getXStream().fromXML(
+                            txtMessage.getText());
+                    this.geoserverSender.setIsWorking(true);
+                    try {
+                        if (message.getStringProperty("operation").equals("REMOVE")) {
+                            LOGGER.info("Removing ... " + cs.getName());
+
+                            CascadeDeleteVisitor visitor = new CascadeDeleteVisitor(catalog);
+                            cs.accept(visitor);
+                            //this.gsp.removeDataStore(ds);
+                        } else {
+                            LOGGER.info("Adding ... " + cs.getName());
+                            catalog.add(cs);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Caught:" + e);
+                        e.printStackTrace();
+                    } finally {
+                        this.geoserverSender.setIsWorking(false);
+                    }
+                    
+                }
+                else {
                     System.out.println("Invalid message received.");
                 }
-            }
+            } 
         } catch (JMSException e) {
             System.out.println("Caught:" + e);
             e.printStackTrace();
