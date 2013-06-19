@@ -1,4 +1,5 @@
-geoserver-mq
+Geoserver Streaming Replication (GRS)
 ============
 
-Turn GeoServer for big SDI
+Geoserver Streaming Replication (GSR) provides the capability to continuously ship and apply the Geoserver configuration.
+
