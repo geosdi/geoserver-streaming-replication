@@ -22,6 +22,7 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.commons.io.FileUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CatalogException;
+import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.CoverageStoreInfo;
 import org.geoserver.catalog.DataStoreInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
@@ -133,6 +134,7 @@ public class GeoserverSenderMQ implements CatalogListener,
             System.out
                     .println("#################handleAddEvent######################");
             Object source = event.getSource();
+            LOGGER.info(source.toString());
             try {
                 if (source instanceof LayerInfo) {
                     addLayer((LayerInfo) source);
@@ -142,6 +144,8 @@ public class GeoserverSenderMQ implements CatalogListener,
                     addDataStore((DataStoreInfo) source);
                 } else if ( source instanceof CoverageStoreInfo ) {
                     addCoverageStore((CoverageStoreInfo)source);
+                } else if ( source instanceof CoverageInfo ) {
+                    addCoverageInfo((CoverageInfo)source);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -198,6 +202,21 @@ public class GeoserverSenderMQ implements CatalogListener,
             producer.send(message);
         }
     }
+    
+    void addCoverageInfo(CoverageInfo ci) throws IOException, JMSException {
+        if (!isWorking) {
+            LOGGER.info("Persisting datastore " + ci.getName());
+            File file = File.createTempFile("test", ".dat");
+            persist(ci, file);
+            String messageStr = FileUtils.readFileToString(file);
+            Message message = session.createTextMessage(messageStr);
+            message.setStringProperty("type", "CoverageInfo");
+            message.setStringProperty("sender", super.toString());
+            message.setStringProperty("operation", "ADD");
+            LOGGER.info("MESSAGE : " +messageStr);
+            producer.send(message);
+        }
+    }
 
     //datastores
     void addDataStore(DataStoreInfo ds) throws IOException, JMSException {
@@ -230,6 +249,10 @@ public class GeoserverSenderMQ implements CatalogListener,
                     removeFeatureType((FeatureTypeInfo) source);
                 } else if (source instanceof DataStoreInfo) {
                     removeDataStore((DataStoreInfo) source, event);
+                } else if ( source instanceof CoverageStoreInfo ) {
+                    removeCoverageStore((CoverageStoreInfo)source, event);
+                } else if ( source instanceof CoverageInfo ) {
+                    removeCoverageInfo((CoverageInfo)source, event);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -397,10 +420,25 @@ public class GeoserverSenderMQ implements CatalogListener,
         persist(coverageStoreInfo, file);
         String messageStr = FileUtils.readFileToString(file);
         Message message = session.createTextMessage(messageStr);
-        message.setStringProperty("type", "DataStoreInfo");
+        message.setStringProperty("type", "CoverageStoreInfo");
         message.setStringProperty("sender", super.toString());
         message.setStringProperty("operation", "REMOVE");
         LOGGER.info("MESSAGE : " +messageStr);
         producer.send(message);
     }
+    
+    private void removeCoverageInfo(CoverageInfo coverageInfo, CatalogRemoveEvent event) throws IOException, JMSException {
+        LOGGER.fine("CLUSTER Message  - Remove datastore " + coverageInfo.getName());
+        File file = File.createTempFile("test", ".dat");
+        persist(coverageInfo, file);
+        String messageStr = FileUtils.readFileToString(file);
+        Message message = session.createTextMessage(messageStr);
+        message.setStringProperty("type", "CoverageInfo");
+        message.setStringProperty("sender", super.toString());
+        message.setStringProperty("operation", "REMOVE");
+        LOGGER.info("MESSAGE : " +messageStr);
+        producer.send(message);
+    }
+    
+    
 }

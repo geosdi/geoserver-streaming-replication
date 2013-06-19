@@ -18,9 +18,8 @@ import javax.jms.Topic;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.geosdi.geoservermq.sender.GeoserverSenderMQ;
 import org.geoserver.catalog.CascadeDeleteVisitor;
-import org.geoserver.catalog.CascadeDeleteVisitor;
 import org.geoserver.catalog.Catalog;
-import org.geoserver.catalog.CatalogInfo;
+import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.CoverageStoreInfo;
 import org.geoserver.catalog.DataStoreInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
@@ -177,6 +176,38 @@ public class GeoserverReceiverMQ implements MessageListener {
                         } else {
                             LOGGER.info("Adding ... " + cs.getName());
                             catalog.add(cs);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Caught:" + e);
+                        e.printStackTrace();
+                    } finally {
+                        this.geoserverSender.setIsWorking(false);
+                    }
+                    
+                }  else if (message.getStringProperty("type")
+                        .equals("CoverageInfo") && !this.geoserverSender.isWorking()) {
+                    
+                    xp.setEncryptPasswordFields(false);
+                    TextMessage txtMessage = (TextMessage) message;
+                    LOGGER.info(txtMessage.getText());
+                    CoverageInfo ci = (CoverageInfo) xp.getXStream().fromXML(
+                            txtMessage.getText());
+                    this.geoserverSender.setIsWorking(true);
+                    try {
+                        if (message.getStringProperty("operation").equals("REMOVE")) {
+                            LOGGER.info("Removing ... " + ci.getName());
+
+                            List<LayerInfo> selection = catalog.getLayers(catalog.getResource(ci.getId(), ResourceInfo.class));
+                            System.out.println("Removing...: " +selection);                    
+                            CascadeDeleteVisitor visitor = new CascadeDeleteVisitor(catalog);
+                            ci.accept(visitor);
+                            for (LayerInfo li : selection) {
+                                 li.accept(visitor);
+                            }
+                            //this.gsp.removeDataStore(ds);
+                        } else {
+                            LOGGER.info("Adding ... " + ci.getName());
+                            catalog.add(ci);
                         }
                     } catch (Exception e) {
                         System.out.println("Caught:" + e);
