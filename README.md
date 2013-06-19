@@ -1,4 +1,5 @@
-geoserver-mq
+geoserver-streaming-replication
 ============
 
-Turn GeoServer for big SDI
+Geoserver Streaming Replication (SR) provides the capability to continuously ship and apply the Geoserver configuration.
+
