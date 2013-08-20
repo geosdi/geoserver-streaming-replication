@@ -24,6 +24,17 @@
     </bean>
     
     <beans>
+        
+        <bean id="dependencyBag" class="org.geosdi.geoservermq.utility.DependencyBag">
+            <constructor-arg ref="geoserverSender" />
+            <constructor-arg ref="rawCatalog" />
+            <constructor-arg ref="mapper" />
+        </bean>
+        
+        <bean id="receiverOperationFactory" class="org.geosdi.geoservermq.receiver.ReceiverOperationFactory">
+            <constructor-arg ref="dependencyBag" />
+        </bean>
+        
         <bean id="geoserverSender" class="org.geosdi.geoservermq.sender.GeoserverSenderMQ">
             <constructor-arg ref="resourceLoader" />
             <constructor-arg ref="rawCatalog" />
@@ -35,7 +46,17 @@
             <constructor-arg ref="rawCatalog" />
             <constructor-arg value="geoservermq{brokerURL}"/>
             <constructor-arg ref="geoserverSender" />
+            <constructor-arg ref="receiverOperationFactory" />
         </bean>
+        
+        <bean id="mapper" class="org.dozer.DozerBeanMapper">
+            <property name="mappingFiles">
+                <list>
+                    <value>dozer-streaming-replication-mappings.xml</value>
+                </list>
+            </property>
+        </bean>
+        
     </beans>
 
 </beans>
